@@ -40,6 +40,7 @@ enable_language(CXX)
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 if(NOT EMSCRIPTEN)
+  option(MUJOCO_BUILD_SHARED "Build the MuJoCo runtime as a shared library" ON)
   option(MUJOCO_BUILD_EXAMPLES "Build samples for MuJoCo" ON)
   option(MUJOCO_BUILD_SIMULATE "Build simulate library for MuJoCo" ON)
   option(MUJOCO_BUILD_STUDIO "Build studio library for MuJoCo" OFF)
@@ -137,12 +138,17 @@ else()
   set(MUJOCO_RESOURCE_FILES "")
 endif()
 
-# Emscripten does not support SHARED libs
-if(NOT EMSCRIPTEN)
+# Emscripten does not support SHARED libs. Native embedders may also request a
+# PIC static runtime so their backend plugin has no external MuJoCo dependency.
+if(NOT EMSCRIPTEN AND MUJOCO_BUILD_SHARED)
   find_package(Threads REQUIRED)
   add_library(mujoco SHARED ${MUJOCO_RESOURCE_FILES})
 else()
   add_library(mujoco STATIC ${MUJOCO_RESOURCE_FILES})
+  set_target_properties(mujoco PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  if(NOT EMSCRIPTEN)
+    find_package(Threads REQUIRED)
+  endif()
 endif()
 
 target_include_directories(
@@ -310,7 +316,7 @@ if(BUILD_TESTING AND MUJOCO_BUILD_TESTS)
   endif()
 endif()
 
-if(NOT EMSCRIPTEN AND NOT (APPLE AND MUJOCO_BUILD_MACOS_FRAMEWORKS))
+if(NOT EMSCRIPTEN AND MUJOCO_BUILD_SHARED AND NOT (APPLE AND MUJOCO_BUILD_MACOS_FRAMEWORKS))
   set(MUJOCO_TARGETS mujoco)
 
   # Install the libraries.
