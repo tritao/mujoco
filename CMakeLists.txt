@@ -53,11 +53,26 @@ if(NOT EMSCRIPTEN)
 endif()
 
 if(EMSCRIPTEN)
-  option(MUJOCO_BUILD_TESTS_WASM "Build tests for WASM bindings" ON)
+  # Built on its own, MuJoCo is the JavaScript bindings. Embedded in another project it is a library in that
+  # project's module: the bindings, their tests and threads are opt-in, and the parent chooses optimization.
+  if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+    set(MUJOCO_WASM_TOP_LEVEL ON)
+  else()
+    set(MUJOCO_WASM_TOP_LEVEL OFF)
+  endif()
+  option(MUJOCO_BUILD_WASM_BINDINGS "Build the JavaScript bindings" ${MUJOCO_WASM_TOP_LEVEL})
+  option(MUJOCO_BUILD_TESTS_WASM "Build tests for WASM bindings" ${MUJOCO_WASM_TOP_LEVEL})
   option(MUJOCO_BUILD_STUDIO "Build studio for MuJoCo (WASM)" OFF)
   option(MUJOCO_USE_FILAMENT "Use filament rendering" OFF)
-  option(MUJOCO_WASM_THREADS "Build with multi-threading support" ON)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -O3 -fexceptions")
+  option(MUJOCO_WASM_THREADS "Build with multi-threading support" ${MUJOCO_WASM_TOP_LEVEL})
+  if(MUJOCO_WASM_TOP_LEVEL)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+  endif()
+  # The model compiler throws and catches its own errors, so exceptions must be catchable. Use Emscripten's
+  # JavaScript-based exceptions unless the build already chose native Wasm exceptions; the two cannot be mixed.
+  if(NOT CMAKE_CXX_FLAGS MATCHES "-fwasm-exceptions")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions")
+  endif()
   if(MUJOCO_WASM_THREADS)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
@@ -94,7 +109,7 @@ if(EMSCRIPTEN)
     # Filament's WASM path resolves: ${FILAMENT}/${IMPORT_EXECUTABLES_DIR}/ImportExecutables-Release.cmake
     # FILAMENT = _deps/filament-src, so ../../ resolves to CMAKE_BINARY_DIR.
     set(IMPORT_EXECUTABLES_DIR "../../" CACHE PATH "" FORCE)
-  else()
+  elseif(MUJOCO_BUILD_STUDIO OR MUJOCO_USE_FILAMENT)
     message(WARNING "Host tools (matc, resgen, cmgen) not found in ${MUJOCO_NATIVE_BUILD_DIR}/bin. WASM build of Studio might fail.")
   endif()
 endif()
@@ -186,7 +201,7 @@ if(MUJOCO_USE_FILAMENT)
   endif()
 endif()
 
-if(EMSCRIPTEN)
+if(EMSCRIPTEN AND MUJOCO_BUILD_WASM_BINDINGS)
   add_subdirectory(wasm)
 endif()
 
